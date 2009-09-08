@@ -7,12 +7,12 @@ from django.core.urlresolvers import reverse
 from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
 from django.views.generic.create_update import delete_object
-import datetime
+import datetime, simplejson, time
 
 from schedule.conf.settings import GET_EVENTS_FUNC, OCCURRENCE_CANCEL_REDIRECT
 from schedule.forms import EventForm, OccurrenceForm
 from schedule.models import *
-from schedule.periods import weekday_names
+from schedule.periods import weekday_names, Period
 from schedule.utils import check_event_permissions, coerce_date_dict
 
 def calendar(request, calendar_slug, template='schedule/calendar.html'):
@@ -85,6 +85,46 @@ def calendar_by_periods(request, calendar_slug, periods=None,
             'here':quote(request.get_full_path()),
         },context_instance=RequestContext(request),)
 
+def calendar_events(request, calendar_slug):
+    """
+    JSON events feed class conforming to the JQuery FullCalendar and
+    jquery-week-calendar CalEvent standard.
+
+    [1]: http://code.google.com/p/jquery-week-calendar/
+    [2]: http://arshaw.com/fullcalendar
+    """
+    calendar = get_object_or_404(Calendar, slug=calendar_slug)
+
+    start = request.GET.get('start', None)
+    start = start and datetime.datetime.fromtimestamp(int(start))
+    end = request.GET.get('end', None)
+    end = end and datetime.datetime.fromtimestamp(int(end))
+
+     # Corresponds to: http://arshaw.com/fullcalendar/docs/#calevent-objects
+    CALEVENT_ITEMS = (
+        ('id', 'id'),
+        ('start', 'start'),
+        ('end', 'end'),
+        ('title', 'summary')
+    )
+
+    events = GET_EVENTS_FUNC(request, calendar)
+    period = Period(events, start, end)
+    cal_events = []
+    for o in period.get_occurrences():
+        start = o.start.isoformat()
+        end = o.end.isoformat()
+        cal_event = {'id': o.event.pk, 'start': start, 'end': end, 'title': o.title}
+        cal_events.append(cal_event)
+
+    json_cal_events = simplejson.dumps(cal_events, ensure_ascii=False)
+
+    response = HttpResponse(json_cal_events)
+    response['Content-Type'] = 'application/json'
+
+    return response
+
+
 def event(request, event_id, template_name="schedule/event.html"):
     """
     This view is for showing an event. It is important to remember that an
@@ -139,10 +179,18 @@ def occurrence(request, event_id,
 @check_event_permissions
 def edit_occurrence(request, event_id,
     template_name="schedule/edit_occurrence.html", *args, **kwargs):
-    event, occurrence = get_occurrence(event_id, *args, **kwargs)
+    iso_date = kwargs.pop('iso_date', None)
+    if iso_date:
+        t = datetime.datetime.strptime(iso_date, "%Y-%m-%dT%H:%M:%S")
+        event, occurrence = get_occurrence(event_id, year=t.year, month=t.month,
+                                           day=t.day, hour=t.hour,
+                                           minute=t.minute, second=t.second)
+        occurrence.save()
+    else:
+        event, occurrence = get_occurrence(event_id, *args, **kwargs)
     next = kwargs.get('next', None)
     form = OccurrenceForm(data=request.POST or None, instance=occurrence)
-    if form.is_valid():
+    if request.method == 'POST' and form.is_valid():
         occurrence = form.save(commit=False)
         occurrence.event = event
         occurrence.save()
@@ -187,7 +235,7 @@ def get_occurrence(event_id, occurrence_id=None, year=None, month=None,
     if(occurrence_id):
         occurrence = get_object_or_404(Occurrence, id=occurrence_id)
         event = occurrence.event
-    elif(all((year, month, day, hour, minute, second))):
+    elif(all([x != None for x in [year, month, day, hour, minute, second]])):
         event = get_object_or_404(Event, id=event_id)
         occurrence = event.get_occurrence(
             datetime.datetime(int(year), int(month), int(day), int(hour),
@@ -246,6 +294,16 @@ def create_or_edit_event(request, calendar_slug, event_id=None, next=None,
             raise Http404
         except ValueError:
             raise Http404
+    else:
+        start = request.GET.get('start', None)
+        if start:
+            date = datetime.datetime.strptime(start, "%Y-%m-%dT%H:%M:%S")
+            initial_data = {
+                "start": date,
+                "end": date + datetime.timedelta(minutes=30)
+            }
+
+
 
     instance = None
     if event_id is not None:
@@ -256,15 +314,16 @@ def create_or_edit_event(request, calendar_slug, event_id=None, next=None,
     form = form_class(data=request.POST or None, instance=instance,
         hour24=True, initial=initial_data)
 
-    if form.is_valid():
-        event = form.save(commit=False)
-        if instance is None:
-            event.creator = request.user
-            event.calendar = calendar
-        event.save()
-        next = next or reverse('event', args=[event.id])
-        next = get_next_url(request, next)
-        return HttpResponseRedirect(next)
+    if request.method == 'POST':
+        if form.is_valid():
+            event = form.save(commit=False)
+            if instance is None:
+                event.creator = request.user
+                event.calendar = calendar
+            event.save()
+            next = next or reverse('event', args=[event.id])
+            next = get_next_url(request, next)
+            return HttpResponseRedirect(next)
 
     next = get_next_url(request, next)
     return render_to_response(template_name, {
