@@ -213,7 +213,7 @@ div.time-picker {
     overflow: auto;
     background: #fff;
     border: 1px solid #000;
-    z-index: 99;
+    z-index: 9999;
 }
 
 div.time-picker-12hours {
