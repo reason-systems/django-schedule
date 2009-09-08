@@ -51,6 +51,10 @@ url(r'^calendar/(?P<calendar_slug>[-\w]+)/$',
     'schedule.views.calendar',
     name = "calendar_home",
     ),
+url(r'^calendar/(?P<calendar_slug>[-\w]+)/events/$',
+    'schedule.views.calendar_events',
+    name = "calendar_events",
+    ),
 
 #Event Urls
 url(r'^event/create/(?P<calendar_slug>[-\w]+)/$',
@@ -61,7 +65,7 @@ url(r'^event/edit/(?P<calendar_slug>[-\w]+)/(?P<event_id>\d+)/$',
     name='edit_event'),
 url(r'^event/(?P<event_id>\d+)/$',
     'schedule.views.event',
-    name="event"), 
+    name="event"),
 url(r'^event/delete/(?P<event_id>\d+)/$',
     'schedule.views.delete_event',
     name="delete_event"),
@@ -69,7 +73,7 @@ url(r'^event/delete/(?P<event_id>\d+)/$',
 #urls for already persisted occurrences
 url(r'^occurrence/(?P<event_id>\d+)/(?P<occurrence_id>\d+)/$',
     'schedule.views.occurrence',
-    name="occurrence"), 
+    name="occurrence"),
 url(r'^occurrence/cancel/(?P<event_id>\d+)/(?P<occurrence_id>\d+)/$',
     'schedule.views.cancel_occurrence',
     name="cancel_occurrence"),
@@ -79,22 +83,25 @@ url(r'^occurrence/edit/(?P<event_id>\d+)/(?P<occurrence_id>\d+)/$',
 
 #urls for unpersisted occurrences
 url(r'^occurrence/(?P<event_id>\d+)/(?P<year>\d+)/(?P<month>\d+)/(?P<day>\d+)/(?P<hour>\d+)/(?P<minute>\d+)/(?P<second>\d+)/$',
-    'schedule.views.occurrence', 
+    'schedule.views.occurrence',
     name="occurrence_by_date"),
+url(r'^occurrence/(?P<event_id>\d+)/(?P<iso_date>[-:\w]+)/edit/$',
+    'schedule.views.edit_occurrence',
+    name="edit_occurrence_by_iso_date"),
 url(r'^occurrence/cancel/(?P<event_id>\d+)/(?P<year>\d+)/(?P<month>\d+)/(?P<day>\d+)/(?P<hour>\d+)/(?P<minute>\d+)/(?P<second>\d+)/$',
-    'schedule.views.cancel_occurrence', 
+    'schedule.views.cancel_occurrence',
     name="cancel_occurrence_by_date"),
 url(r'^occurrence/edit/(?P<event_id>\d+)/(?P<year>\d+)/(?P<month>\d+)/(?P<day>\d+)/(?P<hour>\d+)/(?P<minute>\d+)/(?P<second>\d+)/$',
-    'schedule.views.edit_occurrence', 
+    'schedule.views.edit_occurrence',
     name="edit_occurrence_by_date"),
-    
 
-#feed urls 
+
+#feed urls
 url(r'^feed/calendar/(.*)/$',
-    'django.contrib.syndication.views.feed', 
+    'django.contrib.syndication.views.feed',
     { "feed_dict": { "upcoming": UpcomingEventsFeed } }),
- 
+
 (r'^ical/calendar/(.*)/$', CalendarICalendar()),
 
- url(r'$', object_list, info_dict, name='schedule'), 
+ url(r'$', object_list, info_dict, name='schedule'),
 )
