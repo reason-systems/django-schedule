@@ -167,7 +167,15 @@ def occurrence(request, event_id,
     ``back_url``
         the url from which this request was refered
     """
-    event, occurrence = get_occurrence(event_id, *args, **kwargs)
+    iso_date = kwargs.pop('iso_date', None)
+    if iso_date:
+        t = datetime.datetime.strptime(iso_date, "%Y-%m-%dT%H:%M:%S")
+        event, occurrence = get_occurrence(event_id, year=t.year, month=t.month,
+                                           day=t.day, hour=t.hour,
+                                           minute=t.minute, second=t.second)
+        occurrence.save()
+    else:
+        event, occurrence = get_occurrence(event_id, *args, **kwargs)
     back_url = request.META.get('HTTP_REFERER', None)
     return render_to_response(template_name, {
         'event': event,
